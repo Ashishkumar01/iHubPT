@@ -1,6 +1,9 @@
 from typing import Dict, Any, List
-from langchain.tools import BaseTool
+from langchain.tools import BaseTool, Tool
 from pydantic import BaseModel
+
+class ExampleToolArgs(BaseModel):
+    input_text: str
 
 class ToolRegistry:
     def __init__(self):
@@ -18,20 +21,20 @@ class ToolRegistry:
 
     def list_tools(self) -> List[Dict[str, Any]]:
         """List all registered tools with their descriptions."""
-        return [
-            {
+        tools_list = []
+        for name, tool in self._tools.items():
+            tool_info = {
                 "name": name,
                 "description": tool.description,
-                "parameters": tool.args_schema.schema()
+                "parameters": {}
             }
-            for name, tool in self._tools.items()
-        ]
+            if tool.args_schema:
+                tool_info["parameters"] = tool.args_schema.schema()
+            tools_list.append(tool_info)
+        return tools_list
 
 # Create a global tool registry instance
 tool_registry = ToolRegistry()
-
-# Example tool registration
-from langchain.tools import Tool
 
 def example_tool(input_text: str) -> str:
     """An example tool that processes text."""
@@ -39,9 +42,10 @@ def example_tool(input_text: str) -> str:
 
 # Register the example tool
 tool_registry.register_tool(
-    Tool(
-        name="example_tool",
+    Tool.from_function(
         func=example_tool,
-        description="An example tool that processes text input"
+        name="example_tool",
+        description="An example tool that processes text input",
+        args_schema=ExampleToolArgs
     )
 ) 

@@ -1,34 +1,76 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
-from .models import Agent, AgentCreate, AgentUpdate, AgentStatus
+from typing import List, Optional
+from .models import Agent, AgentCreate, AgentUpdate, AgentStatus, AgentResponse, ChatMessage
 from .engine import agent_engine
 from .tools import tool_registry
 from .vector_store import vector_store
 from langchain.schema import Document
+from datetime import datetime
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.post("/agents", response_model=Agent)
 async def create_agent(agent: AgentCreate):
     """Create a new agent."""
-    # Here you would typically save the agent to a database
-    # For now, we'll just create an in-memory agent
-    new_agent = Agent(**agent.dict())
-    return new_agent
+    try:
+        logger.info(f"Creating new agent with name: {agent.name}")
+        
+        # Validate tool names
+        for tool_name in agent.tools:
+            try:
+                tool_registry.get_tool(tool_name)
+            except ValueError as e:
+                logger.warning(f"Tool {tool_name} not found")
+                raise HTTPException(status_code=400, detail=f"Tool {tool_name} not found")
+        
+        # Create a new agent with default status
+        new_agent = Agent(
+            name=agent.name,
+            description=agent.description,
+            prompt=agent.prompt,
+            tools=agent.tools,  # Keep as tool names
+            hitl_enabled=agent.hitl_enabled,
+            status=AgentStatus.IDLE,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        logger.info(f"Created agent object with ID: {new_agent.id}")
+        
+        # Store the agent in ChromaDB
+        try:
+            stored_agent = agent_engine.create_agent(new_agent)
+            logger.info(f"Successfully stored agent in ChromaDB with ID: {stored_agent.id}")
+            return stored_agent
+        except Exception as e:
+            logger.error(f"Failed to store agent in ChromaDB: {str(e)}")
+            raise
+    except Exception as e:
+        logger.error(f"Error creating agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/agents", response_model=List[Agent])
 async def list_agents():
     """List all agents."""
-    # Here you would typically fetch agents from a database
-    # For now, return an empty list
-    return []
+    try:
+        return agent_engine.get_agents()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/agents/{agent_id}", response_model=Agent)
 async def get_agent(agent_id: str):
     """Get a specific agent by ID."""
-    # Here you would typically fetch the agent from a database
-    # For now, raise a 404
-    raise HTTPException(status_code=404, detail="Agent not found")
+    try:
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        return agent
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/start")
 async def start_agent(agent_id: str):
@@ -138,4 +180,21 @@ async def delete_collection(collection_name: str):
         vector_store.delete_collection(collection_name)
         return {"status": "success", "message": f"Deleted collection {collection_name}"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/agents/{agent_id}/chat", response_model=ChatMessage)
+async def chat_with_agent(agent_id: str, message: ChatMessage):
+    """Chat with a specific agent."""
+    try:
+        # Get the agent from ChromaDB
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Process the message and get response
+        response = await agent_engine.process_chat_message(agent_id, message.content)
+        
+        return ChatMessage(content=response)
+    except Exception as e:
+        logger.error(f"Error in chat_with_agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

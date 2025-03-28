@@ -1,18 +1,20 @@
-from typing import List, Optional
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
-from langchain.schema import Document
 import os
+from typing import List, Dict, Any, Optional, Tuple
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_chroma import Chroma
+from langchain.schema import Document
+from app.models import Agent
 
 class VectorStore:
     def __init__(self):
-        # Use the global OpenAI API key from environment
+        self.persist_directory = os.path.join(os.path.dirname(__file__), "chroma_db")
         self.embeddings = OpenAIEmbeddings(
-            openai_api_key=os.getenv("OPENAI_API_KEY")
+            api_key=os.getenv("OPENAI_API_KEY")
         )
         self.vector_store = Chroma(
-            persist_directory="./data/chroma",
-            embedding_function=self.embeddings
+            persist_directory=self.persist_directory,
+            embedding_function=self.embeddings,
+            collection_name="agents"
         )
 
     def add_documents(self, documents: List[Document]) -> None:
@@ -23,7 +25,7 @@ class VectorStore:
         """Search for similar documents."""
         return self.vector_store.similarity_search(query, k=k)
 
-    def search_with_score(self, query: str, k: int = 4) -> List[tuple[Document, float]]:
+    def search_with_score(self, query: str, k: int = 4) -> List[Tuple[Document, float]]:
         """Search for similar documents with similarity scores."""
         return self.vector_store.similarity_search_with_score(query, k=k)
 
