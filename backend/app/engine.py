@@ -17,11 +17,15 @@ from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.schema.messages import AIMessage
 from app.models import AgentCreate, AgentUpdate, ChatMessage
 from app.vector_store import VectorStore
+from app.config import Settings
 import logging
 import time
 from langchain.callbacks import get_openai_callback
 
 logger = logging.getLogger(__name__)
+
+# Load settings
+settings = Settings()
 
 class AgentState(TypedDict):
     messages: List[BaseMessage]
@@ -63,11 +67,20 @@ class AgentEngine:
         self._active_agents: Dict[str, Dict[str, Any]] = {}
         self._initialize_db()
         self.vector_store = VectorStore()
+        
+        # Initialize LLM with settings
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+            
         self.llm = ChatOpenAI(
-            model="gpt-4-turbo-preview",
-            temperature=0.7,
-            api_key=os.getenv("OPENAI_API_KEY")
+            model=settings.OPENAI_MODEL,
+            temperature=settings.OPENAI_TEMPERATURE,
+            max_tokens=settings.OPENAI_MAX_TOKENS,
+            api_key=api_key
         )
+        logger.info(f"Initialized LLM with model: {settings.OPENAI_MODEL}")
+        
         self.tool_registry = tool_registry
 
     def _initialize_db(self):

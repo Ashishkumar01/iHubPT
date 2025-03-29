@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     HITL_ENABLED: bool = True
     HITL_TIMEOUT: int = 60  # 1 minute timeout for HITL operations
     
+    # OpenAI settings
+    OPENAI_MODEL: str = "gpt-4-turbo-preview"  # Model to use for chat
+    OPENAI_TEMPERATURE: float = 0.7  # Temperature for model responses
+    OPENAI_MAX_TOKENS: Optional[int] = None  # Max tokens per response, None for no limit
+    
     class Config:
         env_file = ".env"
 
