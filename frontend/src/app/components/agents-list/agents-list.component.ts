@@ -120,20 +120,35 @@ export class AgentsListComponent implements OnInit, OnDestroy {
 
   editAgent(agent: Agent): void {
     const dialogRef = this.dialog.open(EditAgentDialogComponent, {
+      data: agent,
       width: '600px',
-      data: agent
+      autoFocus: true,
+      restoreFocus: true,
+      ariaLabel: 'Edit Agent Dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
+        this.loading = true;
         this.agentService.updateAgent(agent.id, result).subscribe({
-          next: () => {
-            this.loadAgents();
+          next: (updatedAgent) => {
+            console.log('Agent updated successfully:', updatedAgent);
+            // Update the agent in the data source
+            const index = this.agents.findIndex(a => a.id === agent.id);
+            if (index !== -1) {
+              this.agents[index] = updatedAgent;
+            }
+            this.loading = false;
             this.snackBar.open('Agent updated successfully', 'Close', { duration: 3000 });
           },
           error: (error) => {
             console.error('Error updating agent:', error);
-            this.snackBar.open('Failed to update agent', 'Close', { duration: 3000 });
+            this.loading = false;
+            this.snackBar.open(
+              error.error?.detail || 'Failed to update agent. Please try again.',
+              'Close',
+              { duration: 5000 }
+            );
           }
         });
       }

@@ -190,19 +190,37 @@ export class TestAgentComponent implements OnInit, OnDestroy {
     if (!this.selectedAgent) return;
 
     const dialogRef = this.dialog.open(EditAgentDialogComponent, {
-      data: this.selectedAgent
+      data: this.selectedAgent,
+      width: '600px',
+      autoFocus: true,
+      restoreFocus: true,
+      ariaLabel: 'Edit Agent Dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.agentService.updateAgent(result.id, result).subscribe({
+        console.log('Selected agent ID:', this.selectedAgent?.id);
+        console.log('Update data:', result);
+        
+        if (!this.selectedAgent?.id) {
+          console.error('No agent ID available');
+          this.snackBar.open('Error: Missing agent ID', 'Close', { duration: 5000 });
+          return;
+        }
+
+        this.agentService.updateAgent(this.selectedAgent.id, result).subscribe({
           next: (updatedAgent: Agent) => {
+            console.log('Agent updated successfully:', updatedAgent);
             this.selectedAgent = updatedAgent;
             this.snackBar.open('Agent updated successfully', 'Close', { duration: 3000 });
           },
-          error: (error: Error) => {
+          error: (error: any) => {
             console.error('Error updating agent:', error);
-            this.snackBar.open('Failed to update agent', 'Close', { duration: 3000 });
+            this.snackBar.open(
+              error.error?.detail || 'Failed to update agent. Please try again.',
+              'Close',
+              { duration: 5000 }
+            );
           }
         });
       }

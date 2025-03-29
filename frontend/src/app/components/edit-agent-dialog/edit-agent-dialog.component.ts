@@ -2,7 +2,7 @@ import { Component, OnInit, Inject } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MaterialModule } from '../../shared/material.module';
-import { Agent } from '../../models/agent';
+import { Agent, AgentUpdate } from '../../models/agent';
 import { AgentService, Tool } from '../../services/agent.service';
 import { CommonModule } from '@angular/common';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -13,6 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatListModule } from '@angular/material/list';
+import { A11yModule } from '@angular/cdk/a11y';
 
 @Component({
   selector: 'app-edit-agent-dialog',
@@ -29,34 +30,44 @@ import { MatListModule } from '@angular/material/list';
     MatInputModule,
     MatButtonModule,
     MatDialogModule,
-    MatListModule
+    MatListModule,
+    A11yModule
   ],
   template: `
-    <h2 mat-dialog-title>Edit Agent</h2>
-    <form [formGroup]="form" (ngSubmit)="onSubmit()">
-      <mat-dialog-content>
+    <h2 mat-dialog-title id="edit-agent-dialog-title">Edit Agent</h2>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" cdkTrapFocus cdkTrapFocusAutoCapture>
+      <mat-dialog-content aria-labelledby="edit-agent-dialog-title">
         <mat-form-field appearance="fill">
           <mat-label>Name</mat-label>
-          <input matInput formControlName="name" required>
+          <input matInput formControlName="name" required cdkFocusInitial>
+          <mat-error *ngIf="form.get('name')?.invalid && form.get('name')?.touched">
+            Name is required
+          </mat-error>
         </mat-form-field>
 
         <mat-form-field appearance="fill">
           <mat-label>Description</mat-label>
           <textarea matInput formControlName="description" rows="3" required></textarea>
+          <mat-error *ngIf="form.get('description')?.invalid && form.get('description')?.touched">
+            Description is required
+          </mat-error>
         </mat-form-field>
 
         <mat-form-field appearance="fill">
           <mat-label>Prompt</mat-label>
           <textarea matInput formControlName="prompt" rows="5" required></textarea>
           <mat-hint>Define the agent's behavior and capabilities</mat-hint>
+          <mat-error *ngIf="form.get('prompt')?.invalid && form.get('prompt')?.touched">
+            Prompt is required
+          </mat-error>
         </mat-form-field>
 
-        <div class="tools-section">
-          <h3>Available Tools</h3>
+        <div class="tools-section" role="region" aria-labelledby="tools-section-title">
+          <h3 id="tools-section-title">Available Tools</h3>
           <p class="tools-description">Select the tools this agent will have access to:</p>
-          <mat-selection-list formControlName="tools" class="tools-list">
+          <mat-selection-list formControlName="tools" class="tools-list" aria-label="Available tools">
             <mat-tooltip [matTooltip]="tool.description" [matTooltipPosition]="'right'" *ngFor="let tool of availableTools">
-              <mat-list-option [value]="tool.name">
+              <mat-list-option [value]="tool.name" [attr.aria-label]="tool.name + ': ' + tool.description">
                 <mat-icon matListItemIcon>build</mat-icon>
                 <div matListItemTitle>{{tool.name}}</div>
                 <div matListItemLine class="tool-description">{{tool.description}}</div>
@@ -68,7 +79,8 @@ import { MatListModule } from '@angular/material/list';
           </mat-error>
         </div>
 
-        <div class="hitl-section">
+        <div class="hitl-section" role="region" aria-labelledby="hitl-section-title">
+          <h3 id="hitl-section-title" class="visually-hidden">Human-in-the-Loop Settings</h3>
           <mat-checkbox formControlName="hitl_enabled" color="primary">
             Enable Human-in-the-Loop
           </mat-checkbox>
@@ -77,7 +89,7 @@ import { MatListModule } from '@angular/material/list';
       </mat-dialog-content>
 
       <mat-dialog-actions align="end">
-        <button mat-button (click)="onCancel()">Cancel</button>
+        <button mat-button type="button" (click)="onCancel()">Cancel</button>
         <button mat-raised-button color="primary" type="submit" [disabled]="!form.valid">
           Save
         </button>
@@ -135,6 +147,17 @@ import { MatListModule } from '@angular/material/list';
       color: rgba(0, 0, 0, 0.6);
       margin-left: 0;
     }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     ::ng-deep .mat-mdc-list-option {
       border-bottom: 1px solid #eee;
       &:last-child {
@@ -186,15 +209,31 @@ export class EditAgentDialogComponent implements OnInit {
 
   onSubmit(): void {
     if (this.form.valid) {
+      // Ensure we have a valid agent ID
+      if (!this.data?.id) {
+        console.error('Missing agent ID');
+        this.dialogRef.close(null);
+        return;
+      }
+
       const formValue = this.form.value;
-      const updatedAgent: Partial<Agent> = {
-        name: formValue.name,
-        description: formValue.description,
-        prompt: formValue.prompt,
+      const updatedAgent: AgentUpdate = {
+        name: formValue.name || undefined,
+        description: formValue.description || undefined,
+        prompt: formValue.prompt || undefined,
         hitl_enabled: formValue.hitl_enabled,
         tools: formValue.tools || []
       };
-      this.dialogRef.close(updatedAgent);
+
+      // Log the update data for debugging
+      console.log('Submitting agent update:', updatedAgent);
+      
+      // Remove any undefined values
+      const cleanedUpdate = Object.fromEntries(
+        Object.entries(updatedAgent).filter(([_, value]) => value !== undefined)
+      ) as AgentUpdate;
+
+      this.dialogRef.close(cleanedUpdate);
     } else {
       this.form.markAllAsTouched();
     }

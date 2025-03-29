@@ -76,14 +76,23 @@ async def get_agent(agent_id: str):
 async def update_agent(agent_id: str, agent_update: AgentUpdate):
     """Update an existing agent."""
     try:
+        logger.info(f"Received update request for agent ID: {agent_id}")
+        logger.info(f"Update data received: {agent_update}")
+        
         # Get the agent from the database
         agent = agent_engine.get_agent(agent_id)
         if not agent:
+            logger.error(f"Agent not found with ID: {agent_id}")
             raise HTTPException(status_code=404, detail="Agent not found")
         
+        # Convert agent_update to dict, excluding None values
+        update_data = agent_update.dict(exclude_unset=True, exclude_none=True)
+        logger.info(f"Processed update data for agent {agent_id}: {update_data}")
+        
         # Validate tool names if tools are being updated
-        if agent_update.tools is not None:
-            for tool_name in agent_update.tools:
+        if "tools" in update_data:
+            logger.info(f"Validating tools: {update_data['tools']}")
+            for tool_name in update_data["tools"]:
                 try:
                     tool_registry.get_tool(tool_name)
                 except ValueError as e:
@@ -91,15 +100,22 @@ async def update_agent(agent_id: str, agent_update: AgentUpdate):
                     raise HTTPException(status_code=400, detail=f"Tool {tool_name} not found")
         
         # Update the agent
-        updated_agent = agent_engine.update_agent(agent_id, agent_update.dict(exclude_unset=True))
-        if not updated_agent:
-            raise HTTPException(status_code=500, detail="Failed to update agent")
-        
-        return updated_agent
+        try:
+            updated_agent = agent_engine.update_agent(agent_id, update_data)
+            if not updated_agent:
+                logger.error(f"Failed to update agent {agent_id} in database")
+                raise HTTPException(status_code=500, detail="Failed to update agent")
+            logger.info(f"Successfully updated agent {agent_id}")
+            return updated_agent
+        except Exception as e:
+            logger.error(f"Error in agent_engine.update_agent: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
     except ValueError as e:
+        logger.error(f"Validation error updating agent: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error updating agent: {str(e)}")
+        logger.error(f"Unexpected error updating agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/start")

@@ -179,19 +179,37 @@ class AgentEngine:
         if not agent:
             return None
         
-        # Update agent fields
-        for key, value in agent_update.items():
-            setattr(agent, key, value)
-        agent.updated_at = datetime.utcnow()
-        
-        # Store updated agent
-        agent_dict = self._agent_to_dict(agent)
-        self.collection.update(
-            ids=[agent_id],
-            documents=[agent.description],
-            metadatas=[agent_dict]
-        )
-        return agent
+        try:
+            # Update agent fields
+            if "name" in agent_update:
+                agent.name = agent_update["name"]
+            if "description" in agent_update:
+                agent.description = agent_update["description"]
+            if "prompt" in agent_update:
+                agent.prompt = agent_update["prompt"]
+            if "tools" in agent_update:
+                agent.tools = agent_update["tools"]
+            if "hitl_enabled" in agent_update:
+                agent.hitl_enabled = bool(agent_update["hitl_enabled"])
+            if "status" in agent_update:
+                agent.status = agent_update["status"]
+            
+            agent.updated_at = datetime.utcnow()
+            
+            # Store updated agent
+            agent_dict = self._agent_to_dict(agent)
+            self.collection.update(
+                ids=[agent_id],
+                documents=[agent.description],
+                metadatas=[agent_dict]
+            )
+            
+            logger.info(f"Successfully updated agent {agent_id}")
+            return agent
+            
+        except Exception as e:
+            logger.error(f"Failed to update agent {agent_id}: {str(e)}")
+            raise ValueError(f"Failed to update agent: {str(e)}")
 
     def delete_agent(self, agent_id: str) -> bool:
         """Delete an agent and clean up its resources."""

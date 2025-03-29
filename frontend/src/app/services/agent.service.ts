@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Agent, AgentCreate, AgentUpdate, AgentStatus } from '../models/agent';
 import { environment } from '../../environments/environment';
+import { tap } from 'rxjs/operators';
 
 interface ChatResponse {
   content: string;
@@ -34,8 +35,18 @@ export class AgentService {
     return this.http.get<Agent>(`${this.apiUrl}/${id}`);
   }
 
-  updateAgent(id: string, agent: Partial<Agent>): Observable<Agent> {
-    return this.http.put<Agent>(`${this.apiUrl}/${id}`, agent);
+  updateAgent(id: string, agent: AgentUpdate): Observable<Agent> {
+    console.log(`Updating agent ${id} with data:`, agent);
+    if (!id) {
+      console.error('No agent ID provided to updateAgent');
+      throw new Error('Agent ID is required for update');
+    }
+    return this.http.put<Agent>(`${this.apiUrl}/${id}`, agent).pipe(
+      tap({
+        next: (response) => console.log('Update successful:', response),
+        error: (error) => console.error('Update failed:', error)
+      })
+    );
   }
 
   deleteAgent(id: string): Observable<void> {
