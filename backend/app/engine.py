@@ -308,18 +308,39 @@ class AgentEngine:
     def pause_agent(self, agent_id: str) -> None:
         """Pause a running agent."""
         agent_id = str(agent_id)
-        if agent_id not in self._active_agents:
-            raise ValueError(f"Agent {agent_id} is not running")
+        
+        if agent_id in self._active_agents:
+            # Agent is actively running in memory
+            try:
+                agent_state = self._active_agents[agent_id]
+                if agent_state["status"] == AgentStatus.RUNNING:
+                    agent_state["status"] = AgentStatus.PAUSED
+                    logger.info(f"Agent {agent_id} paused in memory")
+                    # Note: DB status is updated by the endpoint after this call succeeds
+                else:
+                    logger.warning(f"Agent {agent_id} is in active list but not RUNNING (Status: {agent_state['status']}). Cannot pause.")
+                    # Optionally raise an error here if this state is unexpected
+            except Exception as e:
+                logger.error(f"Error pausing agent {agent_id} in memory: {str(e)}")
+                raise ValueError(f"Failed to pause agent {agent_id}: {str(e)}")
+        else:
+            # Agent is not in the active memory dictionary (possibly due to restart)
+            # Check the database status
+            logger.warning(f"Agent {agent_id} not found in active agents list. Checking database status.")
+            agent = self.get_agent(agent_id)
+            if not agent:
+                raise ValueError(f"Agent {agent_id} not found in database")
 
-        try:
-            # Store current state and pause workflow
-            agent_state = self._active_agents[agent_id]
-            agent_state["status"] = AgentStatus.PAUSED
-            
-            logger.info(f"Agent {agent_id} paused successfully")
-        except Exception as e:
-            logger.error(f"Failed to pause agent {agent_id}: {str(e)}")
-            raise ValueError(f"Failed to pause agent: {str(e)}")
+            if agent.status == AgentStatus.RUNNING:
+                # If DB says running, update DB status directly to PAUSED
+                logger.info(f"Agent {agent_id} found running in DB but not active. Setting status to PAUSED in DB.")
+                self.update_agent(agent_id, {"status": AgentStatus.PAUSED})
+            elif agent.status == AgentStatus.PAUSED:
+                logger.info(f"Agent {agent_id} is already PAUSED in the database.")
+            else:
+                # Agent exists but is IDLE in DB, cannot pause
+                logger.warning(f"Agent {agent_id} found in DB but status is {agent.status}. Cannot pause.")
+                raise ValueError(f"Agent {agent_id} is not running (status: {agent.status})")
 
     def resume_agent(self, agent_id: str) -> None:
         """Resume a paused agent."""

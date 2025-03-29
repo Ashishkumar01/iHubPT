@@ -16,8 +16,7 @@ class AgentStatus(str, Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
+    
 
 class Agent(BaseModel):
     """Base model for an agent."""
