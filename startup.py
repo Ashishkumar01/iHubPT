@@ -5,6 +5,7 @@ import time
 import signal
 import platform
 import logging
+import shutil
 from datetime import datetime
 
 # Configure logging
@@ -99,36 +100,35 @@ def start_backend():
 def start_frontend():
     """Start the frontend development server."""
     try:
-        frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
-        logger.info(f"Changing directory to: {frontend_dir}")
-        os.chdir(frontend_dir)
-        
+        clear_angular_cache()
         logger.info("Starting frontend server...")
-        process = subprocess.Popen(
-            ["ng", "serve"],
+        frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+        
+        # Install dependencies if needed
+        if not os.path.exists(os.path.join(frontend_dir, "node_modules")):
+            logger.info("Installing frontend dependencies...")
+            subprocess.run(["npm", "install"], cwd=frontend_dir, check=True)
+        
+        # Start the frontend server
+        frontend_process = subprocess.Popen(
+            ["npm", "start"],
+            cwd=frontend_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True,
-            bufsize=1
+            text=True
         )
         
-        # Create threads to stream output
-        def stream_output(stream, prefix):
-            for line in stream:
-                logger.info(f"{prefix}: {line.strip()}")
-                
-        import threading
-        threading.Thread(target=stream_output, args=(process.stdout, "FRONTEND_OUT"), daemon=True).start()
-        threading.Thread(target=stream_output, args=(process.stderr, "FRONTEND_ERR"), daemon=True).start()
+        # Wait for the server to start
+        time.sleep(2)
         
-        time.sleep(5)
-        if process.poll() is None:
-            logger.info("Frontend server started successfully")
-            return process
-        else:
-            logger.error("Failed to start frontend server")
-            raise RuntimeError("Frontend server failed to start")
-            
+        if frontend_process.poll() is not None:
+            stdout, stderr = frontend_process.communicate()
+            logger.error(f"Frontend server failed to start:\nstdout: {stdout}\nstderr: {stderr}")
+            raise Exception("Frontend server failed to start")
+        
+        logger.info("Frontend server started successfully")
+        return frontend_process
+        
     except Exception as e:
         logger.error(f"Error starting frontend server: {str(e)}")
         raise
@@ -161,6 +161,22 @@ def monitor_servers(backend_process, frontend_process):
         except Exception as e:
             logger.error(f"Error in server monitoring: {str(e)}")
             raise
+
+def clear_angular_cache():
+    """Clear the Angular cache directory."""
+    try:
+        frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+        cache_dir = os.path.join(frontend_dir, ".angular")
+        
+        if os.path.exists(cache_dir):
+            logger.info("Clearing Angular cache...")
+            shutil.rmtree(cache_dir)
+            logger.info("Angular cache cleared successfully")
+        else:
+            logger.info("No Angular cache found")
+    except Exception as e:
+        logger.error(f"Error clearing Angular cache: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     try:

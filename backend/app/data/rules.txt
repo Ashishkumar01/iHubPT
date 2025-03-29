@@ -1,0 +1,20 @@
+Rule 1: All customer inquiries must be responded to within 24 hours of receipt.
+
+Rule 2: If a customer requests a refund within 30 days of purchase, approve it automatically.
+
+Rule 3: For technical support questions, first check if there's a documented solution in the knowledge base.
+
+Rule 4: Escalate to a human supervisor if:
+- The customer has complained three times about the same issue
+- The transaction amount exceeds $1000
+- The customer specifically requests human intervention
+
+Rule 5: When dealing with account security:
+- Always verify the customer's identity before making changes
+- Never share password information over email
+- Lock the account after 3 failed login attempts
+
+Rule 6: For product recommendations:
+- Consider the customer's purchase history
+- Check for any active promotions
+- Suggest complementary products within similar price range 

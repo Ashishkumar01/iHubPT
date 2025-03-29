@@ -18,6 +18,8 @@ from langchain.schema.messages import AIMessage
 from app.models import AgentCreate, AgentUpdate, ChatMessage
 from app.vector_store import VectorStore
 import logging
+import time
+from langchain.callbacks import get_openai_callback
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,35 @@ class AgentState(TypedDict):
     current_step: str
     input: str
     tools: Dict[str, Any]
+
+class TokenUsageCallback:
+    def __init__(self):
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+        self.total_cost = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any) -> None:
+        """Run when LLM starts running."""
+        pass
+
+    def on_llm_end(self, response: Any, **kwargs: Any) -> None:
+        """Run when LLM ends running."""
+        if hasattr(response, 'usage'):
+            self.prompt_tokens = response.usage.prompt_tokens
+            self.completion_tokens = response.usage.completion_tokens
+            self.total_tokens = response.usage.total_tokens
+            self.total_cost = response.usage.total_cost
+
+    def on_llm_error(self, error: Exception, **kwargs: Any) -> None:
+        """Run when LLM errors."""
+        logger.error(f"LLM error: {error}")
 
 class AgentEngine:
     def __init__(self):
@@ -354,39 +385,91 @@ class AgentEngine:
         
         return agent.status
 
-    async def process_chat_message(self, agent_id: str, message: str) -> str:
-        """Process a chat message and return the agent's response."""
+    async def process_chat_message(self, agent_id: str, message: str, requestor_id: str = "administrator") -> str:
+        """Process a chat message and return the response."""
+        start_time = time.time()
+        token_callback = TokenUsageCallback()
+        
         try:
-            # Get the agent from ChromaDB
+            # Get the agent (synchronous operation)
             agent = self.get_agent(agent_id)
             if not agent:
                 raise ValueError(f"Agent {agent_id} not found")
 
-            # Create the system message with agent's prompt
+            # Create messages for the conversation
             system_message = SystemMessage(content=agent.prompt)
-            
-            # Create the human message
             human_message = HumanMessage(content=message)
-            
-            # Get the chat history from the agent's context
-            chat_history = agent.context.get("chat_history", [])
-            
-            # Create messages list with history
-            messages = [system_message] + chat_history + [human_message]
-            
-            # Get response from the LLM
-            response = await self.llm.ainvoke(messages)
-            
-            # Update chat history
-            chat_history.extend([human_message, response])
-            agent.context["chat_history"] = chat_history
-            
-            # Update the agent in ChromaDB
-            self.update_agent(agent_id, {"context": agent.context})
-            
+
+            # Compile chat history
+            messages = [system_message]
+            if hasattr(agent, 'context') and agent.context and agent.context.get("chat_history"):
+                messages.extend(agent.context["chat_history"])
+            messages.append(human_message)
+
+            # Get response from language model (async operation) with token tracking
+            with get_openai_callback() as cb:
+                response = await self.llm.ainvoke(messages)
+                token_callback.prompt_tokens = cb.prompt_tokens
+                token_callback.completion_tokens = cb.completion_tokens
+                token_callback.total_tokens = cb.total_tokens
+                token_callback.total_cost = cb.total_cost
+
+            # Calculate duration
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # Create chat log entry with flattened metadata
+            chat_log_data = {
+                "agent_id": agent_id,
+                "request_message": message,
+                "response_message": response.content,
+                "input_tokens": token_callback.prompt_tokens,
+                "output_tokens": token_callback.completion_tokens,
+                "total_tokens": token_callback.total_tokens,
+                "requestor_id": requestor_id,
+                "model_name": self.llm.model_name,
+                "duration_ms": duration_ms,
+                "status": "success",
+                "temperature": str(self.llm.temperature),
+                "max_tokens": str(self.llm.max_tokens) if self.llm.max_tokens else "None",
+                "cost": token_callback.total_cost
+            }
+
+            # Log the chat interaction (synchronous operation)
+            self.vector_store.add_chat_log(chat_log_data)
+
+            # Update agent context
+            context = getattr(agent, 'context', {}) or {}
+            if "chat_history" not in context:
+                context["chat_history"] = []
+            context["chat_history"].append(human_message)
+            context["chat_history"].append(response)
+
+            # Update agent in database (synchronous operation)
+            self.update_agent(agent_id, {"context": context})
+
             return response.content
-            
+
         except Exception as e:
+            # Log error in chat log with flattened structure
+            duration_ms = int((time.time() - start_time) * 1000)
+            error_log_data = {
+                "agent_id": agent_id,
+                "request_message": message,
+                "response_message": "",
+                "input_tokens": token_callback.prompt_tokens,
+                "output_tokens": token_callback.completion_tokens,
+                "total_tokens": token_callback.total_tokens,
+                "requestor_id": requestor_id,
+                "model_name": self.llm.model_name,
+                "duration_ms": duration_ms,
+                "status": "error",
+                "error_message": str(e),
+                "temperature": str(self.llm.temperature),
+                "max_tokens": str(self.llm.max_tokens) if self.llm.max_tokens else "None",
+                "cost": token_callback.total_cost
+            }
+            self.vector_store.add_chat_log(error_log_data)
+            
             logger.error(f"Error processing chat message: {str(e)}")
             raise
 
