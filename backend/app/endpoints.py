@@ -76,38 +76,92 @@ async def get_agent(agent_id: str):
 async def start_agent(agent_id: str):
     """Start an agent's workflow."""
     try:
-        # Here you would typically fetch the agent from a database
-        # For now, we'll use a dummy agent
-        agent = Agent(
-            id=agent_id,
-            name="Dummy Agent",
-            description="A dummy agent for testing",
-            tools=[],
-            prompt="You are a helpful assistant."
-        )
+        # Get the agent from the database
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
         
+        # Start the agent
         agent_engine.start_agent(agent)
+        
+        # Update agent status
+        agent_engine.update_agent(agent_id, {"status": AgentStatus.RUNNING})
+        
         return {"status": "success", "message": f"Agent {agent_id} started"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error starting agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/pause")
 async def pause_agent(agent_id: str):
     """Pause an agent's workflow."""
     try:
+        # Get the agent from the database
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Pause the agent
         agent_engine.pause_agent(agent_id)
+        
+        # Update agent status
+        agent_engine.update_agent(agent_id, {"status": AgentStatus.PAUSED})
+        
         return {"status": "success", "message": f"Agent {agent_id} paused"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error pausing agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/resume")
 async def resume_agent(agent_id: str):
     """Resume a paused agent's workflow."""
     try:
+        # Get the agent from the database
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Resume the agent
         agent_engine.resume_agent(agent_id)
+        
+        # Update agent status
+        agent_engine.update_agent(agent_id, {"status": AgentStatus.RUNNING})
+        
         return {"status": "success", "message": f"Agent {agent_id} resumed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error resuming agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    """Delete an agent."""
+    try:
+        # Get the agent from the database
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Stop the agent if it's running
+        if agent.status == AgentStatus.RUNNING:
+            agent_engine.pause_agent(agent_id)
+        
+        # Delete the agent
+        success = agent_engine.delete_agent(agent_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete agent")
+        
+        return {"status": "success", "message": f"Agent {agent_id} deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/agents/{agent_id}/status")
 async def get_agent_status(agent_id: str):

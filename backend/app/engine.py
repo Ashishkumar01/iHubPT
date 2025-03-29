@@ -41,40 +41,64 @@ class AgentEngine:
 
     def _initialize_db(self):
         """Initialize ChromaDB for agent storage."""
-        persist_directory = os.path.join(os.path.dirname(__file__), "chroma_db")
-        os.makedirs(persist_directory, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=persist_directory)
-        self.collection = self.client.get_or_create_collection("agents")
+        try:
+            persist_directory = os.path.join(os.path.dirname(__file__), "chroma_db")
+            os.makedirs(persist_directory, exist_ok=True)
+            
+            # Initialize ChromaDB client with logging
+            logger.info(f"Initializing ChromaDB with persist directory: {persist_directory}")
+            self.client = chromadb.PersistentClient(path=persist_directory)
+            
+            # Create or get collection with explicit schema
+            self.collection = self.client.get_or_create_collection(
+                name="agents",
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.info("ChromaDB collection 'agents' initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {str(e)}")
+            raise
 
     def _agent_to_dict(self, agent: Agent) -> Dict[str, Any]:
         """Convert an Agent object to a dictionary for storage."""
         try:
-            return {
-                "id": str(agent.id),  # Convert UUID to string
+            agent_dict = {
+                "id": str(agent.id),
                 "name": agent.name,
                 "description": agent.description,
                 "prompt": agent.prompt,
-                "tools": json.dumps(agent.tools),  # Store tool names as JSON string
-                "hitl_enabled": agent.hitl_enabled,
-                "status": agent.status,
+                "tools": json.dumps(agent.tools),
+                "hitl_enabled": str(agent.hitl_enabled).lower(),  # Store as string
+                "status": agent.status.value.upper(),  # Store enum value in uppercase
                 "created_at": agent.created_at.isoformat(),
                 "updated_at": agent.updated_at.isoformat()
             }
+            logger.debug(f"Converted agent to dict: {agent_dict}")
+            return agent_dict
         except Exception as e:
+            logger.error(f"Failed to convert agent to dictionary: {str(e)}")
             raise ValueError(f"Failed to convert agent to dictionary: {str(e)}")
 
     def _dict_to_agent(self, data: Dict[str, Any]) -> Agent:
         """Convert a dictionary to an Agent object."""
         try:
-            # Convert datetime strings back to datetime objects
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
-            data["updated_at"] = datetime.fromisoformat(data["updated_at"])
-            
-            # Convert tools string back to list of tool names
-            data["tools"] = json.loads(data["tools"])
-            
-            return Agent(**data)
+            # Convert string values back to appropriate types
+            agent_data = {
+                "id": data["id"],
+                "name": data["name"],
+                "description": data["description"],
+                "prompt": data["prompt"],
+                "tools": json.loads(data["tools"]),
+                "hitl_enabled": data["hitl_enabled"] == "true",
+                "status": AgentStatus(data["status"].upper()),  # Convert to uppercase before creating enum
+                "created_at": datetime.fromisoformat(data["created_at"]),
+                "updated_at": datetime.fromisoformat(data["updated_at"])
+            }
+            logger.debug(f"Converting dict to agent: {agent_data}")
+            return Agent(**agent_data)
         except Exception as e:
+            logger.error(f"Failed to convert dictionary to agent: {str(e)}")
             raise ValueError(f"Failed to convert dictionary to agent: {str(e)}")
 
     def create_agent(self, agent: Agent) -> Agent:
@@ -89,8 +113,27 @@ class AgentEngine:
 
     def get_agents(self) -> List[Agent]:
         """Get all agents from ChromaDB."""
-        results = self.collection.get()
-        return [self._dict_to_agent(metadata) for metadata in results["metadatas"]]
+        try:
+            results = self.collection.get()
+            if not results["metadatas"]:
+                logger.info("No agents found in collection")
+                return []
+            
+            agents = []
+            for metadata in results["metadatas"]:
+                try:
+                    agent = self._dict_to_agent(metadata)
+                    agents.append(agent)
+                except Exception as e:
+                    logger.error(f"Failed to convert agent metadata: {str(e)}")
+                    continue
+            
+            logger.info(f"Successfully retrieved {len(agents)} agents")
+            return agents
+            
+        except Exception as e:
+            logger.error(f"Error retrieving agents: {str(e)}")
+            raise
 
     def get_agent(self, agent_id: str) -> Optional[Agent]:
         """Get a specific agent by ID from ChromaDB."""
@@ -120,111 +163,196 @@ class AgentEngine:
         return agent
 
     def delete_agent(self, agent_id: str) -> bool:
-        """Delete an agent from ChromaDB."""
+        """Delete an agent and clean up its resources."""
+        agent_id = str(agent_id)
         try:
+            # Clean up active agent if running
+            if agent_id in self._active_agents:
+                self.pause_agent(agent_id)
+                del self._active_agents[agent_id]
+            
+            # Delete from database
             self.collection.delete(ids=[agent_id])
+            
+            logger.info(f"Agent {agent_id} deleted successfully")
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to delete agent {agent_id}: {str(e)}")
             return False
 
     def create_workflow(self, agent: Agent) -> StateGraph:
         """Create a LangGraph workflow for the agent."""
-        # Create the base prompt template
-        prompt = PromptTemplate(
-            input_variables=["input", "tools", "messages"],
-            template=agent.prompt
-        )
+        try:
+            # Create the base prompt template with agent's prompt
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", agent.prompt),
+                ("human", "{input}")
+            ])
 
-        # Create the LLM chain
-        chain = LLMChain(
-            llm=agent.llm,  # You'll need to set this up
-            prompt=prompt
-        )
+            # Create the chain using the new RunnableSequence pattern
+            chain = prompt | self.llm
 
-        # Create the graph
-        workflow = StateGraph(AgentState)
+            # Create the graph
+            workflow = StateGraph(AgentState)
 
-        # Add nodes for each tool name
-        for tool_name in agent.tools:
+            # Initialize the state
+            initial_state = {
+                "messages": [],
+                "current_step": "main",
+                "input": "",
+                "tools": {}
+            }
+
+            # Add nodes for each tool
+            available_tools = {}
+            for tool_name in agent.tools:
+                try:
+                    tool = self.tool_registry.get_tool(tool_name)
+                    available_tools[tool_name] = tool
+                    workflow.add_node(
+                        tool_name,
+                        lambda state, t=tool: self._run_tool(state, t)
+                    )
+                except ValueError as e:
+                    logger.warning(f"Tool {tool_name} not found: {str(e)}")
+
+            # Add the main chain node
             workflow.add_node(
-                name=tool_name,
-                func=lambda state, tool_name=tool_name: self._run_tool(state, tool_name)
+                "main",
+                lambda state: self._run_chain(state, chain)
             )
 
-        # Add the main chain node
-        workflow.add_node(
-            name="main",
-            func=lambda state: self._run_chain(state, chain)
-        )
+            return workflow
 
-        # Define edges and conditions
-        workflow.add_edge("main", "tools")
-        workflow.add_edge("tools", "main")
+        except Exception as e:
+            logger.error(f"Error creating workflow: {str(e)}")
+            raise ValueError(f"Failed to create workflow: {str(e)}")
 
-        # Set the entry point
-        workflow.set_entry_point("main")
-
-        return workflow
-
-    def _run_tool(self, state: AgentState, tool_name: str) -> AgentState:
+    def _run_tool(self, state: AgentState, tool: Tool) -> AgentState:
         """Run a tool and update the state."""
-        tool = self.tool_registry.get_tool(tool_name)
-        result = tool.run(state["input"])
-        
-        # Update state with tool result
-        state["messages"].append(BaseMessage(content=f"Tool {tool_name} result: {result}"))
-        state["current_step"] = "main"
-        return state
+        try:
+            result = tool.run(state["input"])
+            
+            # Update state with tool result
+            state["messages"].append(AIMessage(content=f"Tool result: {result}"))
+            state["current_step"] = "main"
+            return state
+        except Exception as e:
+            logger.error(f"Error running tool: {str(e)}")
+            state["messages"].append(AIMessage(content=f"Error running tool: {str(e)}"))
+            state["current_step"] = "main"
+            return state
 
-    def _run_chain(self, state: AgentState, chain: LLMChain) -> AgentState:
-        """Run the LLM chain and update the state."""
-        result = chain.run(
-            input=state["input"],
-            tools=state["tools"],
-            messages=state["messages"]
-        )
-        
-        # Update state with chain result
-        state["messages"].append(BaseMessage(content=result))
-        state["current_step"] = "tools"
-        return state
+    def _run_chain(self, state: AgentState, chain) -> AgentState:
+        """Run the chain and update the state."""
+        try:
+            # Prepare the input for the chain
+            chain_input = {
+                "input": state["input"],
+                "chat_history": "\n".join([msg.content for msg in state["messages"]])
+            }
+            
+            # Run the chain
+            result = chain.invoke(chain_input)
+            
+            # Update state with chain result
+            state["messages"].append(AIMessage(content=result.content))
+            state["current_step"] = "main"
+            return state
+        except Exception as e:
+            logger.error(f"Error running chain: {str(e)}")
+            state["messages"].append(AIMessage(content=f"Error: {str(e)}"))
+            state["current_step"] = "main"
+            return state
 
-    def start_agent(self, agent: Agent) -> str:
+    def start_agent(self, agent: Agent) -> None:
         """Start an agent's workflow."""
-        if agent.id in self._active_agents:
-            raise ValueError(f"Agent {agent.id} is already running")
+        agent_id = str(agent.id)
+        if agent_id in self._active_agents:
+            raise ValueError(f"Agent {agent_id} is already running")
 
-        workflow = self.create_workflow(agent)
-        self._active_agents[agent.id] = {
-            "workflow": workflow,
-            "status": AgentStatus.RUNNING,
-            "current_step": None
-        }
-        return agent.id
+        try:
+            # Create and initialize the workflow
+            workflow = self.create_workflow(agent)
+            
+            # Initialize the agent state
+            initial_state = {
+                "messages": [],
+                "current_step": "main",
+                "input": "",
+                "tools": {
+                    name: self.tool_registry.get_tool(name)
+                    for name in agent.tools
+                }
+            }
+            
+            # Store the active agent
+            self._active_agents[agent_id] = {
+                "workflow": workflow,
+                "state": initial_state,
+                "status": AgentStatus.RUNNING,
+                "agent": agent
+            }
+            
+            logger.info(f"Agent {agent_id} started successfully")
+            
+            # Update agent status in database
+            self.update_agent(agent_id, {"status": AgentStatus.RUNNING})
+            
+        except Exception as e:
+            logger.error(f"Failed to start agent {agent_id}: {str(e)}")
+            # Update agent status to failed in database
+            self.update_agent(agent_id, {"status": AgentStatus.FAILED})
+            raise ValueError(f"Failed to start agent: {str(e)}")
 
     def pause_agent(self, agent_id: str) -> None:
-        """Pause an agent's workflow."""
+        """Pause a running agent."""
+        agent_id = str(agent_id)
         if agent_id not in self._active_agents:
-            raise ValueError(f"Agent {agent_id} not found")
-        
-        self._active_agents[agent_id]["status"] = AgentStatus.PAUSED
+            raise ValueError(f"Agent {agent_id} is not running")
+
+        try:
+            # Store current state and pause workflow
+            agent_state = self._active_agents[agent_id]
+            agent_state["status"] = AgentStatus.PAUSED
+            
+            logger.info(f"Agent {agent_id} paused successfully")
+        except Exception as e:
+            logger.error(f"Failed to pause agent {agent_id}: {str(e)}")
+            raise ValueError(f"Failed to pause agent: {str(e)}")
 
     def resume_agent(self, agent_id: str) -> None:
-        """Resume a paused agent's workflow."""
+        """Resume a paused agent."""
+        agent_id = str(agent_id)
         if agent_id not in self._active_agents:
-            raise ValueError(f"Agent {agent_id} not found")
-        
-        if self._active_agents[agent_id]["status"] != AgentStatus.PAUSED:
+            raise ValueError(f"Agent {agent_id} is not active")
+
+        agent_state = self._active_agents[agent_id]
+        if agent_state["status"] != AgentStatus.PAUSED:
             raise ValueError(f"Agent {agent_id} is not paused")
-        
-        self._active_agents[agent_id]["status"] = AgentStatus.RUNNING
+
+        try:
+            # Resume the workflow
+            agent_state["status"] = AgentStatus.RUNNING
+            
+            logger.info(f"Agent {agent_id} resumed successfully")
+        except Exception as e:
+            logger.error(f"Failed to resume agent {agent_id}: {str(e)}")
+            raise ValueError(f"Failed to resume agent: {str(e)}")
 
     def get_agent_status(self, agent_id: str) -> AgentStatus:
         """Get the current status of an agent."""
-        if agent_id not in self._active_agents:
+        agent_id = str(agent_id)
+        # First check active agents
+        if agent_id in self._active_agents:
+            return self._active_agents[agent_id]["status"]
+        
+        # If not active, get from database
+        agent = self.get_agent(agent_id)
+        if not agent:
             raise ValueError(f"Agent {agent_id} not found")
         
-        return self._active_agents[agent_id]["status"]
+        return agent.status
 
     async def process_chat_message(self, agent_id: str, message: str) -> str:
         """Process a chat message and return the agent's response."""

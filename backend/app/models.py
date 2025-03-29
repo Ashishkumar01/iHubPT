@@ -13,10 +13,11 @@ class Tool(BaseModel):
 
 class AgentStatus(str, Enum):
     """Enum for agent status."""
-    IDLE = "idle"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    IDLE = "IDLE"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 class Agent(BaseModel):
     """Base model for an agent."""
