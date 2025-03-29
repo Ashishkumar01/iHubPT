@@ -1,0 +1,42 @@
+<div class="tools-container">
+  <div class="header">
+    <h1>Available Tools</h1>
+  </div>
+
+  <!-- Error Message -->
+  <mat-card *ngIf="error" class="error-card">
+    <mat-card-content>
+      <div class="error-content">
+        <mat-icon color="warn">error</mat-icon>
+        <span>{{ error }}</span>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Loading Spinner -->
+  <div class="loading-container" *ngIf="loading">
+    <mat-spinner diameter="40"></mat-spinner>
+  </div>
+
+  <!-- Tools Grid -->
+  <div class="tools-grid" *ngIf="!loading">
+    <mat-card *ngFor="let tool of tools" class="tool-card">
+      <mat-card-header>
+        <mat-card-title>{{ tool.name }}</mat-card-title>
+        <mat-icon mat-card-avatar>build</mat-icon>
+      </mat-card-header>
+      <mat-card-content>
+        <p>{{ tool.description }}</p>
+        <div class="parameters" *ngIf="tool.parameters && Object.keys(tool.parameters).length > 0">
+          <h3>Parameters:</h3>
+          <mat-list>
+            <mat-list-item *ngFor="let param of Object.entries(tool.parameters)">
+              <span matListItemTitle>{{ param[0] }}</span>
+              <span matListItemLine>{{ param[1].type }}</span>
+            </mat-list-item>
+          </mat-list>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div> 

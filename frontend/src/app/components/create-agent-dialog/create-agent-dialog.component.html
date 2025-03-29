@@ -1,0 +1,39 @@
+<h2 mat-dialog-title>Create New Agent</h2>
+<form [formGroup]="form" (ngSubmit)="onSubmit()">
+  <mat-dialog-content>
+    <mat-form-field appearance="fill">
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" required>
+      <mat-error *ngIf="form.get('name')?.hasError('required')">
+        Name is required
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Description</mat-label>
+      <textarea matInput formControlName="description" rows="3" required></textarea>
+      <mat-error *ngIf="form.get('description')?.hasError('required')">
+        Description is required
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Prompt</mat-label>
+      <textarea matInput formControlName="prompt" rows="5" required></textarea>
+      <mat-error *ngIf="form.get('prompt')?.hasError('required')">
+        Prompt is required
+      </mat-error>
+    </mat-form-field>
+
+    <mat-checkbox formControlName="hitl_enabled">
+      Enable Human-in-the-Loop
+    </mat-checkbox>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="primary" type="submit" [disabled]="!form.valid">
+      Create
+    </button>
+  </mat-dialog-actions>
+</form> 

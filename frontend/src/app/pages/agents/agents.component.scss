@@ -1,0 +1,86 @@
+.agents-container {
+  padding: 20px;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+
+    h1 {
+      margin: 0;
+    }
+  }
+
+  mat-form-field {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .error-card {
+    margin-bottom: 20px;
+    background-color: #ffebee;
+
+    .error-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+
+  .loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+  }
+
+  table {
+    width: 100%;
+  }
+
+  .mat-column-name {
+    flex: 2;
+  }
+
+  .mat-column-description {
+    flex: 3;
+  }
+
+  .mat-column-status {
+    flex: 1;
+  }
+
+  .mat-column-hitl_enabled {
+    flex: 1;
+  }
+
+  .mat-column-created_at {
+    flex: 1;
+  }
+
+  .mat-column-actions {
+    flex: 0 0 80px;
+    text-align: center;
+  }
+
+  .clickable-row {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+      transform: translateY(-1px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+
+    &.agent-row-active {
+      background-color: rgba(76, 175, 80, 0.1);
+      
+      &:hover {
+        background-color: rgba(76, 175, 80, 0.15);
+      }
+    }
+  }
+} 

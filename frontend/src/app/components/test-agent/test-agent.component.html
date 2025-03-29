@@ -1,0 +1,113 @@
+<div class="test-agent-container">
+  <div class="agent-card">
+    <mat-form-field appearance="outline" class="agent-select">
+      <mat-label>Select Agent</mat-label>
+      <mat-select [(ngModel)]="selectedAgent" (selectionChange)="selectAgent($event.value.id)">
+        <mat-option *ngFor="let agent of agents" [value]="agent">
+          {{agent.name}}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <div class="agent-details" *ngIf="selectedAgent">
+      <div class="header">
+        <h2>{{selectedAgent.name}}</h2>
+        <div class="actions">
+          <button mat-icon-button [matMenuTriggerFor]="menu" matTooltip="Actions">
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #menu="matMenu">
+            <button mat-menu-item (click)="startAgent()" *ngIf="selectedAgent.status !== AgentStatus.RUNNING">
+              <mat-icon>play_arrow</mat-icon>
+              <span>Start Agent</span>
+            </button>
+            <button mat-menu-item (click)="stopAgent()" *ngIf="selectedAgent.status === AgentStatus.RUNNING">
+              <mat-icon>stop</mat-icon>
+              <span>Stop Agent</span>
+            </button>
+            <button mat-menu-item (click)="openEditDialog()">
+              <mat-icon>edit</mat-icon>
+              <span>Edit Agent</span>
+            </button>
+          </mat-menu>
+        </div>
+      </div>
+
+      <p class="agent-description">{{ selectedAgent.description }}</p>
+      <mat-divider></mat-divider>
+      
+      <div class="agent-info">
+        <div class="info-item">
+          <span class="label">Status:</span>
+          <span class="value" [class]="selectedAgent.status.toLowerCase()">
+            {{ selectedAgent.status }}
+          </span>
+        </div>
+        <div class="info-item">
+          <span class="label">Created:</span>
+          <span class="value">{{ selectedAgent.created_at | date:'medium' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Updated:</span>
+          <span class="value">{{ selectedAgent.updated_at | date:'medium' }}</span>
+        </div>
+      </div>
+
+      <div class="tools-section">
+        <h3>Tools</h3>
+        <div class="tools-list">
+          <mat-chip *ngFor="let tool of selectedAgent.tools">{{ tool }}</mat-chip>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-card">
+    <div class="chat-header">
+      <h2>Chat with Agent</h2>
+      <div class="status-indicator" *ngIf="selectedAgent">
+        <mat-icon [class]="selectedAgent.status.toLowerCase()">
+          {{ selectedAgent.status === AgentStatus.RUNNING ? 'check_circle' : 'error' }}
+        </mat-icon>
+        <span>{{ selectedAgent.status === AgentStatus.RUNNING ? 'Agent is running' : 'Agent is not running' }}</span>
+      </div>
+    </div>
+
+    <div class="chat-messages">
+      <div *ngFor="let message of messages" 
+           [class]="'message ' + message.role">
+        <div class="message-content">
+          {{ message.content }}
+        </div>
+        <div class="message-timestamp">
+          {{ message.timestamp | date:'short' }}
+        </div>
+      </div>
+      <div class="loading" *ngIf="isLoading">
+        <mat-spinner diameter="24"></mat-spinner>
+        <span>Agent is thinking...</span>
+      </div>
+    </div>
+
+    <div class="chat-input">
+      <mat-form-field appearance="outline" class="message-input">
+        <mat-label>Type your message</mat-label>
+        <input matInput
+               [(ngModel)]="newMessage"
+               placeholder="Type your message..."
+               [disabled]="!canSendMessage()"
+               (keyup.enter)="sendMessage()">
+        <mat-error *ngIf="selectedAgent && selectedAgent.status !== AgentStatus.RUNNING">
+          Agent must be running to send messages
+        </mat-error>
+      </mat-form-field>
+      <button mat-raised-button
+              color="primary"
+              [disabled]="!newMessage.trim() || !canSendMessage()"
+              (click)="sendMessage()">
+        <mat-icon>send</mat-icon>
+        <span>Send</span>
+      </button>
+    </div>
+  </div>
+</div>

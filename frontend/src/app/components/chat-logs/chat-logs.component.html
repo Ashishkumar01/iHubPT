@@ -1,0 +1,172 @@
+<div class="chat-logs-container">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Chat Logs</mat-card-title>
+    </mat-card-header>
+    
+    <mat-card-content>
+      <!-- Filters -->
+      <div class="filters-container">
+        <mat-form-field appearance="outline">
+          <mat-label>Start Date</mat-label>
+          <input matInput [matDatepicker]="startPicker" [formControl]="startDate">
+          <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
+          <mat-datepicker #startPicker></mat-datepicker>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>End Date</mat-label>
+          <input matInput [matDatepicker]="endPicker" [formControl]="endDate">
+          <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
+          <mat-datepicker #endPicker></mat-datepicker>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Agent</mat-label>
+          <mat-select [formControl]="agentFilter">
+            <mat-option [value]="null">All Agents</mat-option>
+            <mat-option *ngFor="let agent of agents" [value]="agent.id">
+              {{agent.name}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Status</mat-label>
+          <mat-select [formControl]="statusFilter">
+            <mat-option [value]="null">All Statuses</mat-option>
+            <mat-option *ngFor="let status of statuses" [value]="status">
+              {{status}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <button mat-button color="primary" (click)="clearFilters()">
+          Clear Filters
+        </button>
+      </div>
+
+      <!-- Loading Spinner -->
+      <div class="loading-container" *ngIf="loading">
+        <mat-spinner diameter="40"></mat-spinner>
+      </div>
+
+      <!-- Data Table -->
+      <div class="table-container mat-elevation-z8" *ngIf="!loading">
+        <table mat-table [dataSource]="dataSource" matSort>
+          
+          <!-- Timestamp Column -->
+          <ng-container matColumnDef="timestamp">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Timestamp</th>
+            <td mat-cell *matCellDef="let log">{{formatTimestamp(log.timestamp)}}</td>
+          </ng-container>
+
+          <!-- Agent Column -->
+          <ng-container matColumnDef="agent_id">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Agent</th>
+            <td mat-cell *matCellDef="let log">
+              {{getAgentName(log.agent_id)}}
+            </td>
+          </ng-container>
+
+          <!-- User Column -->
+          <ng-container matColumnDef="user">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>User</th>
+            <td mat-cell *matCellDef="let log">{{log.user}}</td>
+          </ng-container>
+
+          <!-- Department Column -->
+          <ng-container matColumnDef="department">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Department</th>
+            <td mat-cell *matCellDef="let log">{{log.department}}</td>
+          </ng-container>
+
+          <!-- Request Message Column -->
+          <ng-container matColumnDef="request_message">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Request</th>
+            <td mat-cell *matCellDef="let log">
+              <div class="message-cell">{{log.request_message}}</div>
+            </td>
+          </ng-container>
+
+          <!-- Response Message Column -->
+          <ng-container matColumnDef="response_message">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Response</th>
+            <td mat-cell *matCellDef="let log">
+              <div class="message-cell">{{log.response_message}}</div>
+            </td>
+          </ng-container>
+
+          <!-- Total Tokens Column -->
+          <ng-container matColumnDef="total_tokens">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Total Tokens</th>
+            <td mat-cell *matCellDef="let log">{{log.total_tokens}}</td>
+          </ng-container>
+
+          <!-- Input Tokens Column -->
+          <ng-container matColumnDef="input_tokens">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Input Tokens</th>
+            <td mat-cell *matCellDef="let log">{{log.input_tokens}}</td>
+          </ng-container>
+
+          <!-- Output Tokens Column -->
+          <ng-container matColumnDef="output_tokens">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Output Tokens</th>
+            <td mat-cell *matCellDef="let log">{{log.output_tokens}}</td>
+          </ng-container>
+
+          <!-- Cost Column -->
+          <ng-container matColumnDef="cost">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Cost</th>
+            <td mat-cell *matCellDef="let log">{{formatCost(log.cost)}}</td>
+          </ng-container>
+
+          <!-- Duration Column -->
+          <ng-container matColumnDef="duration_ms">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Duration</th>
+            <td mat-cell *matCellDef="let log">{{formatDuration(log.duration_ms)}}</td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+            <td mat-cell *matCellDef="let log">
+              <div class="mat-mdc-chip-set">
+                <div class="mat-mdc-chip-grid">
+                  <mat-chip-option [color]="log.status === 'success' ? 'primary' : 'warn'" [selected]="true" [disabled]="true">
+                    {{log.status}}
+                  </mat-chip-option>
+                </div>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let log">
+              <button mat-icon-button color="primary" (click)="viewDetails(log)" matTooltip="View Details">
+                <mat-icon>info</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+
+          <!-- No Data Row -->
+          <tr class="mat-row" *matNoDataRow>
+            <td class="mat-cell" [attr.colspan]="displayedColumns.length">
+              <div class="no-data-message">
+                <mat-icon>info</mat-icon>
+                <span>No chat logs found</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons></mat-paginator>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div> 

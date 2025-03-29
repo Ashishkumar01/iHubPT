@@ -1,0 +1,18 @@
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  tools: string[];
+  hitl_enabled: boolean;
+  status: 'idle' | 'running' | 'failed';
+  created_at: string;
+  updated_at: string;
+  context?: {
+    chat_history?: Array<{
+      content: string;
+      timestamp: string;
+      isUser: boolean;
+    }>;
+  };
+} 
