@@ -94,4 +94,4 @@ class ChatLogCreate(BaseModel):
     duration_ms: int
     status: str
     error_message: Optional[str] = None
-    metadata: Optional[Dict] = None 
+    metadata: Optional[Dict] = None
