@@ -61,4 +61,5 @@ Thumbs.db
 # Python bytecode
 *.pyc
 __pycache__/
-
+*/__pycache__/
+**/__pycache__/
