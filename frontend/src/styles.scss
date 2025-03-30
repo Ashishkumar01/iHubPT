@@ -1,0 +1,99 @@
+/* Material Imports and Theme Configuration */
+@use '@angular/material' as mat;
+
+/* Core Material Styles */
+@include mat.core();
+
+/* Theme Configuration */
+$primary: mat.m2-define-palette(mat.$m2-indigo-palette);
+$accent: mat.m2-define-palette(mat.$m2-pink-palette, A200, A100, A400);
+$warn: mat.m2-define-palette(mat.$m2-red-palette);
+
+$theme: mat.m2-define-light-theme((
+  color: (
+    primary: $primary,
+    accent: $accent,
+    warn: $warn,
+  ),
+  typography: mat.m2-define-typography-config(),
+  density: 0,
+));
+
+/* Include Material Theme */
+@include mat.all-component-themes($theme);
+
+/* Global Styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+/* Typography */
+.mat-typography {
+  h1 {
+    font-size: 2rem;
+    font-weight: 500;
+    margin: 0 0 1rem 0;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin: 0 0 1rem 0;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin: 0 0 1rem 0;
+  }
+}
+
+/* Material Component Overrides */
+.mat-mdc-card {
+  margin-bottom: 1rem;
+}
+
+.mat-mdc-table {
+  width: 100%;
+}
+
+.mat-mdc-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Layout Utilities */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: mat.m2-get-color-from-palette($warn);
+}
+
+/* Flexbox Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+
+/* Spacing Utilities */
+.gap-2 { gap: 0.5rem; }
+.gap-4 { gap: 1rem; }
+.p-4 { padding: 1rem; }
+.m-4 { margin: 1rem; }
+.w-full { width: 100%; }
+
+// --- Add the rest of your custom global styles below ---
+// html, body { height: 100%; }
+// body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+// ... etc

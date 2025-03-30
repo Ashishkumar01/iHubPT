@@ -16,7 +16,9 @@ class AgentStatus(str, Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
-    
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    ERROR = "ERROR"
 
 class Agent(BaseModel):
     """Base model for an agent."""
@@ -60,4 +62,36 @@ class AgentResponse(BaseModel):
 class ChatMessage(BaseModel):
     """Model for chat messages."""
     content: str = Field(..., description="The content of the chat message")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the message") 
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the message")
+
+class ChatLog(BaseModel):
+    """Model for logging chat interactions."""
+    id: str
+    agent_id: str
+    timestamp: str
+    request_message: str
+    response_message: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    requestor_id: str
+    model_name: str
+    duration_ms: int
+    status: str
+    error_message: Optional[str] = None
+    metadata: Optional[Dict] = None
+
+class ChatLogCreate(BaseModel):
+    """Model for creating a new chat log entry."""
+    agent_id: str
+    request_message: str
+    response_message: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    requestor_id: str = "administrator"
+    model_name: str
+    duration_ms: int
+    status: str
+    error_message: Optional[str] = None
+    metadata: Optional[Dict] = None

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import List, Optional
-from .models import Agent, AgentCreate, AgentUpdate, AgentStatus, AgentResponse, ChatMessage
+from .models import Agent, AgentCreate, AgentUpdate, AgentStatus, AgentResponse, ChatMessage, ChatLog, ChatLogCreate
 from .engine import agent_engine
 from .tools import tool_registry
 from .vector_store import vector_store
@@ -70,6 +70,52 @@ async def get_agent(agent_id: str):
             raise HTTPException(status_code=404, detail="Agent not found")
         return agent
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/agents/{agent_id}", response_model=Agent)
+async def update_agent(agent_id: str, agent_update: AgentUpdate):
+    """Update an existing agent."""
+    try:
+        logger.info(f"Received update request for agent ID: {agent_id}")
+        logger.info(f"Update data received: {agent_update}")
+        
+        # Get the agent from the database
+        agent = agent_engine.get_agent(agent_id)
+        if not agent:
+            logger.error(f"Agent not found with ID: {agent_id}")
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Convert agent_update to dict, excluding None values
+        update_data = agent_update.dict(exclude_unset=True, exclude_none=True)
+        logger.info(f"Processed update data for agent {agent_id}: {update_data}")
+        
+        # Validate tool names if tools are being updated
+        if "tools" in update_data:
+            logger.info(f"Validating tools: {update_data['tools']}")
+            for tool_name in update_data["tools"]:
+                try:
+                    tool_registry.get_tool(tool_name)
+                except ValueError as e:
+                    logger.warning(f"Tool {tool_name} not found")
+                    raise HTTPException(status_code=400, detail=f"Tool {tool_name} not found")
+        
+        # Update the agent
+        try:
+            updated_agent = agent_engine.update_agent(agent_id, update_data)
+            if not updated_agent:
+                logger.error(f"Failed to update agent {agent_id} in database")
+                raise HTTPException(status_code=500, detail="Failed to update agent")
+            logger.info(f"Successfully updated agent {agent_id}")
+            return updated_agent
+        except Exception as e:
+            logger.error(f"Error in agent_engine.update_agent: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    except ValueError as e:
+        logger.error(f"Validation error updating agent: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error updating agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/start")
@@ -241,7 +287,7 @@ async def chat_with_agent(agent_id: str, message: ChatMessage):
     """Chat with a specific agent."""
     try:
         # Get the agent from ChromaDB
-        agent = agent_engine.get_agent(agent_id)
+        agent = agent_engine.get_agent(agent_id)  # Synchronous call
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
         
@@ -251,4 +297,36 @@ async def chat_with_agent(agent_id: str, message: ChatMessage):
         return ChatMessage(content=response)
     except Exception as e:
         logger.error(f"Error in chat_with_agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/agents/{agent_id}/chat-logs", response_model=List[ChatLog])
+async def get_agent_chat_logs(agent_id: str):
+    """Get all chat logs for a specific agent."""
+    try:
+        logs = vector_store.get_chat_logs_by_agent(agent_id)
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/agents/{agent_id}/token-usage")
+async def get_agent_token_usage(agent_id: str):
+    """Get token usage statistics for a specific agent."""
+    try:
+        return vector_store.get_token_usage_by_agent(agent_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/chat-logs/timerange", response_model=List[ChatLog])
+async def get_chat_logs_by_timerange(
+    start_time: datetime,
+    end_time: datetime
+):
+    """Get chat logs within a specific time range."""
+    try:
+        logs = vector_store.get_chat_logs_by_timerange(
+            start_time.isoformat(),
+            end_time.isoformat()
+        )
+        return logs
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

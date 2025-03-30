@@ -1,0 +1,95 @@
+<div class="dashboard-container">
+  <!-- Error Message -->
+  <mat-card *ngIf="error" class="error-card">
+    <mat-card-content>
+      <div class="error-content">
+        <mat-icon color="warn">error</mat-icon>
+        <span>{{ error }}</span>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Loading Spinner -->
+  <div class="loading-container" *ngIf="isLoading">
+    <mat-spinner diameter="40"></mat-spinner>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div *ngIf="!isLoading">
+    <mat-grid-list cols="3" rowHeight="200px" gutterSize="16">
+      <!-- Total Agents Card -->
+      <mat-grid-tile>
+        <mat-card class="dashboard-card">
+          <mat-card-header>
+            <mat-card-title>Total Agents</mat-card-title>
+            <mat-icon mat-card-avatar>people</mat-icon>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="card-value">{{ agents.length }}</div>
+          </mat-card-content>
+        </mat-card>
+      </mat-grid-tile>
+
+      <!-- Running Agents Card -->
+      <mat-grid-tile>
+        <mat-card class="dashboard-card">
+          <mat-card-header>
+            <mat-card-title>Running Agents</mat-card-title>
+            <mat-icon mat-card-avatar>play_circle</mat-icon>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="card-value">{{ runningAgents.length }}</div>
+          </mat-card-content>
+        </mat-card>
+      </mat-grid-tile>
+
+      <!-- Paused Agents Card -->
+      <mat-grid-tile>
+        <mat-card class="dashboard-card">
+          <mat-card-header>
+            <mat-card-title>Paused Agents</mat-card-title>
+            <mat-icon mat-card-avatar>pause_circle</mat-icon>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="card-value">{{ pausedAgents.length }}</div>
+          </mat-card-content>
+        </mat-card>
+      </mat-grid-tile>
+    </mat-grid-list>
+
+    <!-- Recent Agents Table -->
+    <mat-card class="recent-agents">
+      <mat-card-header>
+        <mat-card-title>Recent Agents</mat-card-title>
+        <button mat-raised-button color="primary" routerLink="/agents">View All</button>
+      </mat-card-header>
+      <mat-card-content>
+        <table mat-table [dataSource]="agents">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let agent">{{ agent.name }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let agent">
+              <mat-chip [color]="agent.status === 'RUNNING' ? 'primary' : 
+                        agent.status === 'PAUSED' ? 'accent' : 'warn'"
+                       selected>
+                {{ agent.status }}
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="created_at">
+            <th mat-header-cell *matHeaderCellDef>Created</th>
+            <td mat-cell *matCellDef="let agent">{{ agent.created_at | date }}</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div> 

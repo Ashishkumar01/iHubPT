@@ -1,0 +1,45 @@
+<mat-toolbar color="primary">
+  <span>iHubPT</span>
+  <span class="spacer"></span>
+  <nav>
+    <a mat-button routerLink="/dashboard" routerLinkActive="active">
+      <mat-icon>dashboard</mat-icon>
+      Dashboard
+    </a>
+    <a mat-button routerLink="/agents" routerLinkActive="active">
+      <mat-icon>smart_toy</mat-icon>
+      Agents
+    </a>
+    <a mat-button routerLink="/tools" routerLinkActive="active">
+      <mat-icon>build</mat-icon>
+      Tools
+    </a>
+    <a mat-button routerLink="/chat-logs" routerLinkActive="active">
+      <mat-icon>chat</mat-icon>
+      Chat Logs
+    </a>
+  </nav>
+</mat-toolbar>
+
+<div class="content">
+  <router-outlet></router-outlet>
+</div>
+
+<style>
+.spacer {
+  flex: 1 1 auto;
+}
+
+.content {
+  padding: 20px;
+}
+
+nav {
+  display: flex;
+  gap: 8px;
+}
+
+.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+</style>

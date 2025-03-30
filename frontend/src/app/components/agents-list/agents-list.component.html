@@ -1,0 +1,126 @@
+<div class="agents-list-container">
+  <div class="header">
+    <h1>AI Agents</h1>
+    <button mat-raised-button color="primary" (click)="openCreateDialog()">
+      <mat-icon>add</mat-icon>
+      Create Agent
+    </button>
+  </div>
+
+  <mat-card>
+    <mat-card-content>
+      <div class="table-container">
+        <table mat-table [dataSource]="agents">
+          <!-- Name Column -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let agent">{{agent.name}}</td>
+          </ng-container>
+
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let agent">{{agent.description}}</td>
+          </ng-container>
+
+          <!-- Tools Column -->
+          <ng-container matColumnDef="tools">
+            <th mat-header-cell *matHeaderCellDef>Tools</th>
+            <td mat-cell *matCellDef="let agent">
+              <mat-chip-set *ngIf="agent.tools?.length">
+                <mat-chip *ngFor="let tool of agent.tools" [matTooltip]="getToolDescription(tool)" class="tool-chip">
+                  {{tool}}
+                </mat-chip>
+              </mat-chip-set>
+              <span *ngIf="!agent.tools?.length" class="no-tools">No tools</span>
+            </td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let agent">
+              <span class="status-chip" [ngClass]="agent.status.toLowerCase()">
+                {{agent.status}}
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let agent">
+              <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Actions" (click)="$event.stopPropagation()">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item (click)="startAgent(agent)" [disabled]="agent.status === 'RUNNING'">
+                  <mat-icon>play_arrow</mat-icon>
+                  <span>Start</span>
+                </button>
+                <button mat-menu-item (click)="pauseAgent(agent)" [disabled]="agent.status !== 'RUNNING'">
+                  <mat-icon>pause</mat-icon>
+                  <span>Pause</span>
+                </button>
+                <button mat-menu-item (click)="resumeAgent(agent)" [disabled]="agent.status !== 'PAUSED'">
+                  <mat-icon>replay</mat-icon>
+                  <span>Resume</span>
+                </button>
+                <button mat-menu-item (click)="editAgent(agent)">
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                <button mat-menu-item (click)="deleteAgent(agent)" class="delete-action">
+                  <mat-icon>delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+              (click)="viewAgent(row, $event)"
+              [class.agent-row-active]="row.status === AgentStatus.RUNNING"></tr>
+        </table>
+
+        <!-- Loading Spinner -->
+        <div class="loading-spinner" *ngIf="loading">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="!loading && agents.length === 0">
+          <mat-icon>smart_toy</mat-icon>
+          <p>No agents found. Create your first agent to get started!</p>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
+
+<style>
+.agent-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.agent-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.agent-row-active {
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.tool-chip {
+  font-size: 12px;
+  height: 24px;
+  margin: 2px;
+}
+
+.no-tools {
+  color: rgba(0, 0, 0, 0.54);
+  font-size: 12px;
+}
+</style> 
