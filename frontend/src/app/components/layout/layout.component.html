@@ -19,7 +19,7 @@
     </mat-nav-list>
   </mat-sidenav>
   <mat-sidenav-content>
-    <mat-toolbar color="primary">
+    <mat-toolbar>
       <button
         type="button"
         aria-label="Toggle sidenav"
@@ -27,7 +27,10 @@
         (click)="isMenuOpen = !isMenuOpen">
         <mat-icon aria-label="Side nav toggle icon">menu</mat-icon>
       </button>
-      <span>iHubPT</span>
+      <a class="brand" routerLink="/">
+        <img src="assets/logo.png" alt="" class="logo-img">
+        <span>PostTrade IntelligenceHub</span>
+      </a>
     </mat-toolbar>
     <div class="content">
       <router-outlet></router-outlet>
