@@ -93,7 +93,15 @@ export class TestAgentComponent implements OnInit, OnDestroy {
     this.agentService.getAgent(agentId).subscribe({
       next: (agent) => {
         this.selectedAgent = agent;
-        this.messages = [];
+        if (agent.context?.chat_history) {
+          this.messages = agent.context.chat_history.map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: new Date(msg.timestamp)
+          }));
+        } else {
+          this.messages = [];
+        }
         this.startStatusPolling(agent.id);
       },
       error: (error) => {
@@ -161,17 +169,47 @@ export class TestAgentComponent implements OnInit, OnDestroy {
     if (!this.selectedAgent || !this.newMessage.trim()) return;
 
     const message = this.newMessage.trim();
-    this.messages.push({ role: 'user', content: message, timestamp: new Date() });
+    const timestamp = new Date();
+    
+    this.messages.push({ 
+      role: 'user', 
+      content: message, 
+      timestamp: timestamp 
+    });
     this.newMessage = '';
     this.isLoading = true;
 
+    if (!this.selectedAgent.context) {
+      this.selectedAgent.context = {};
+    }
+    if (!this.selectedAgent.context.chat_history) {
+      this.selectedAgent.context.chat_history = [];
+    }
+    
+    this.selectedAgent.context.chat_history.push({
+      role: 'user',
+      content: message,
+      timestamp: timestamp.toISOString()
+    });
+
     this.agentService.sendMessage(this.selectedAgent.id, message).subscribe({
       next: (response: ChatResponse) => {
+        const responseTimestamp = new Date();
+        
         this.messages.push({
           role: 'assistant',
           content: response.content,
-          timestamp: new Date()
+          timestamp: responseTimestamp
         });
+        
+        if (this.selectedAgent && this.selectedAgent.context?.chat_history) {
+          this.selectedAgent.context.chat_history.push({
+            role: 'assistant',
+            content: response.content,
+            timestamp: responseTimestamp.toISOString()
+          });
+        }
+        
         this.isLoading = false;
       },
       error: (error: Error) => {
@@ -183,7 +221,9 @@ export class TestAgentComponent implements OnInit, OnDestroy {
   }
 
   canSendMessage(): boolean {
-    return this.selectedAgent?.status === AgentStatus.RUNNING;
+    if (!this.selectedAgent) return false;
+    return this.selectedAgent.status === AgentStatus.RUNNING || 
+           this.selectedAgent.status === AgentStatus.COMPLETED;
   }
 
   openEditDialog(): void {

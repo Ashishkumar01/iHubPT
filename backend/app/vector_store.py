@@ -98,10 +98,18 @@ class VectorStore:
         chat_log_data['id'] = log_id
         chat_log_data['timestamp'] = datetime.utcnow().isoformat()
         
+        # Convert all values to strings to satisfy ChromaDB requirements
+        string_metadata = {}
+        for key, value in chat_log_data.items():
+            if isinstance(value, (dict, list)):
+                string_metadata[key] = json.dumps(value)
+            else:
+                string_metadata[key] = str(value)
+        
         # Store the chat log
         self.chat_logs_collection.add(
             ids=[log_id],
-            metadatas=[chat_log_data],
+            metadatas=[string_metadata],
             documents=[f"{chat_log_data['request_message']}\n{chat_log_data['response_message']}"],
             embeddings=None  # Let Chroma compute embeddings
         )
@@ -112,7 +120,51 @@ class VectorStore:
         results = self.chat_logs_collection.get(
             where={"agent_id": agent_id}
         )
-        return [metadata for metadata in results['metadatas']] if results['metadatas'] else []
+        
+        logs = []
+        if results['metadatas']:
+            for i, metadata in enumerate(results['metadatas']):
+                # Add id from results['ids'] if available
+                if 'ids' in results and i < len(results['ids']):
+                    metadata['id'] = results['ids'][i]
+                    
+                # Add content from results['documents'] if available
+                if 'documents' in results and i < len(results['documents']):
+                    metadata['content'] = results['documents'][i]
+                
+                # Ensure metadata is a dictionary
+                if isinstance(metadata.get('metadata'), str):
+                    try:
+                        metadata['metadata'] = json.loads(metadata['metadata'])
+                    except json.JSONDecodeError:
+                        metadata['metadata'] = {}
+                elif metadata.get('metadata') is None:
+                    metadata['metadata'] = {}
+                
+                # Set default values for missing fields required by ChatLog model
+                metadata['user'] = metadata.get('requestor_id', 'Administrator')
+                metadata['department'] = metadata.get('department', 'Post Trade')
+                
+                # Convert string numeric values to actual numbers
+                try:
+                    metadata['input_tokens'] = int(metadata.get('input_tokens', 0))
+                    metadata['output_tokens'] = int(metadata.get('output_tokens', 0))
+                    metadata['total_tokens'] = int(metadata.get('total_tokens', 0))
+                    metadata['duration_ms'] = int(metadata.get('duration_ms', 0))
+                    metadata['cost'] = float(metadata.get('cost', 0.0))
+                    metadata['temperature'] = float(metadata.get('temperature', 0.0))
+                except (ValueError, TypeError):
+                    # Default to 0 if conversion fails
+                    metadata['input_tokens'] = 0
+                    metadata['output_tokens'] = 0
+                    metadata['total_tokens'] = 0
+                    metadata['duration_ms'] = 0
+                    metadata['cost'] = 0.0
+                    metadata['temperature'] = 0.0
+                
+                logs.append(metadata)
+                
+        return logs
 
     def get_chat_logs_by_timerange(self, start_time: str, end_time: str) -> List[Dict]:
         """Get chat logs within a specific time range."""
@@ -120,30 +172,192 @@ class VectorStore:
         start_iso = datetime.fromisoformat(start_time.replace('Z', '+00:00')).isoformat()
         end_iso = datetime.fromisoformat(end_time.replace('Z', '+00:00')).isoformat()
         
-        # Get all logs and filter in Python
+        # Get all logs
         results = self.chat_logs_collection.get()
         if not results['metadatas']:
             return []
             
-        # Filter logs within the time range
-        filtered_logs = [
-            metadata for metadata in results['metadatas']
-            if start_iso <= metadata['timestamp'] <= end_iso
-        ]
+        # Filter logs within the time range and ensure metadata is properly formatted
+        filtered_logs = []
+        for i, metadata in enumerate(results['metadatas']):
+            log_time = metadata.get('timestamp', '')
+            if log_time and start_iso <= log_time <= end_iso:
+                # Add id from results['ids'] if available
+                if 'ids' in results and i < len(results['ids']):
+                    metadata['id'] = results['ids'][i]
+                    
+                # Add content from results['documents'] if available
+                if 'documents' in results and i < len(results['documents']):
+                    metadata['content'] = results['documents'][i]
+                
+                # Ensure metadata is a dictionary
+                if isinstance(metadata.get('metadata'), str):
+                    try:
+                        metadata['metadata'] = json.loads(metadata['metadata'])
+                    except json.JSONDecodeError:
+                        metadata['metadata'] = {}
+                elif metadata.get('metadata') is None:
+                    metadata['metadata'] = {}
+                    
+                # Set default values for missing fields required by ChatLog model
+                metadata['user'] = metadata.get('requestor_id', 'Administrator')
+                metadata['department'] = metadata.get('department', 'Post Trade')
+                
+                # Convert string numeric values to actual numbers
+                try:
+                    metadata['input_tokens'] = int(metadata.get('input_tokens', '0'))
+                    metadata['output_tokens'] = int(metadata.get('output_tokens', '0'))
+                    metadata['total_tokens'] = int(metadata.get('total_tokens', '0'))
+                    metadata['duration_ms'] = int(metadata.get('duration_ms', '0'))
+                    
+                    # Handle cost carefully
+                    cost_str = metadata.get('cost', '0.0')
+                    if cost_str and cost_str != 'none':
+                        metadata['cost'] = float(cost_str)
+                    else:
+                        metadata['cost'] = 0.0
+                        
+                    # Handle temperature carefully
+                    temp_str = metadata.get('temperature', '0.0')
+                    if temp_str and temp_str != 'none':
+                        metadata['temperature'] = float(temp_str)
+                    else:
+                        metadata['temperature'] = 0.0
+                        
+                except (ValueError, TypeError) as e:
+                    # Log the error
+                    logger.warning(f"Error converting numeric values in metadata: {str(e)}")
+                    logger.debug(f"Problematic metadata: {metadata}")
+                    
+                    # Default to 0 if conversion fails
+                    metadata['input_tokens'] = 0
+                    metadata['output_tokens'] = 0
+                    metadata['total_tokens'] = 0
+                    metadata['duration_ms'] = 0
+                    metadata['cost'] = 0.0
+                    metadata['temperature'] = 0.0
+                
+                filtered_logs.append(metadata)
+                
         return filtered_logs
 
     def get_token_usage_by_agent(self, agent_id: str) -> Dict:
         """Get token usage statistics for a specific agent."""
         logs = self.get_chat_logs_by_agent(agent_id)
-        total_input = sum(log['input_tokens'] for log in logs)
-        total_output = sum(log['output_tokens'] for log in logs)
-        total = sum(log['total_tokens'] for log in logs)
+        
+        # Safely parse and sum up token usage, handling different data types
+        total_input = 0
+        total_output = 0
+        total = 0
+        total_cost = 0.0
+        
+        for log in logs:
+            try:
+                # Try to parse token values
+                input_tokens = int(log.get('input_tokens', '0'))
+                output_tokens = int(log.get('output_tokens', '0'))
+                total_tokens = int(log.get('total_tokens', '0'))
+                
+                # Try to parse cost
+                cost_str = log.get('cost', '0.0')
+                cost = float(cost_str) if cost_str and cost_str != 'none' else 0.0
+                
+                # Add to totals
+                total_input += input_tokens
+                total_output += output_tokens
+                total += total_tokens
+                total_cost += cost
+                
+            except (ValueError, TypeError) as e:
+                # Log the error but continue processing
+                logger.warning(f"Error parsing token values in log: {str(e)}")
+                logger.debug(f"Problematic log entry: {log}")
+        
         return {
             "total_input_tokens": total_input,
             "total_output_tokens": total_output,
             "total_tokens": total,
+            "total_cost": round(total_cost, 6),
             "total_interactions": len(logs)
         }
+
+    def get_chat_logs_by_agent_and_timerange(self, agent_id: str, start_time: str, end_time: str) -> List[Dict]:
+        """Get chat logs for a specific agent within a specific time range."""
+        # Convert timestamps to ISO format strings for comparison
+        start_iso = datetime.fromisoformat(start_time.replace('Z', '+00:00')).isoformat()
+        end_iso = datetime.fromisoformat(end_time.replace('Z', '+00:00')).isoformat()
+        
+        # Get all logs for the agent
+        results = self.chat_logs_collection.get(
+            where={"agent_id": agent_id}
+        )
+        
+        if not results['metadatas']:
+            return []
+            
+        # Filter logs within the time range and ensure metadata is properly formatted
+        filtered_logs = []
+        for i, metadata in enumerate(results['metadatas']):
+            log_time = metadata.get('timestamp', '')
+            if log_time and start_iso <= log_time <= end_iso:
+                # Add id from results['ids'] if available
+                if 'ids' in results and i < len(results['ids']):
+                    metadata['id'] = results['ids'][i]
+                    
+                # Add content from results['documents'] if available
+                if 'documents' in results and i < len(results['documents']):
+                    metadata['content'] = results['documents'][i]
+                
+                # Ensure metadata is a dictionary
+                if isinstance(metadata.get('metadata'), str):
+                    try:
+                        metadata['metadata'] = json.loads(metadata['metadata'])
+                    except json.JSONDecodeError:
+                        metadata['metadata'] = {}
+                elif metadata.get('metadata') is None:
+                    metadata['metadata'] = {}
+                    
+                # Set default values for missing fields required by ChatLog model
+                metadata['user'] = metadata.get('requestor_id', 'Administrator')
+                metadata['department'] = metadata.get('department', 'Post Trade')
+                
+                # Convert string numeric values to actual numbers
+                try:
+                    metadata['input_tokens'] = int(metadata.get('input_tokens', '0'))
+                    metadata['output_tokens'] = int(metadata.get('output_tokens', '0'))
+                    metadata['total_tokens'] = int(metadata.get('total_tokens', '0'))
+                    metadata['duration_ms'] = int(metadata.get('duration_ms', '0'))
+                    
+                    # Handle cost carefully
+                    cost_str = metadata.get('cost', '0.0')
+                    if cost_str and cost_str != 'none':
+                        metadata['cost'] = float(cost_str)
+                    else:
+                        metadata['cost'] = 0.0
+                        
+                    # Handle temperature carefully
+                    temp_str = metadata.get('temperature', '0.0')
+                    if temp_str and temp_str != 'none':
+                        metadata['temperature'] = float(temp_str)
+                    else:
+                        metadata['temperature'] = 0.0
+                        
+                except (ValueError, TypeError) as e:
+                    # Log the error
+                    logger.warning(f"Error converting numeric values in metadata: {str(e)}")
+                    logger.debug(f"Problematic metadata: {metadata}")
+                    
+                    # Default to 0 if conversion fails
+                    metadata['input_tokens'] = 0
+                    metadata['output_tokens'] = 0
+                    metadata['total_tokens'] = 0
+                    metadata['duration_ms'] = 0
+                    metadata['cost'] = 0.0
+                    metadata['temperature'] = 0.0
+                
+                filtered_logs.append(metadata)
+                
+        return filtered_logs
 
 # Create a global vector store instance
 vector_store = VectorStore() 

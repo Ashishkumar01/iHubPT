@@ -103,25 +103,79 @@ def start_backend():
         logger.error(f"Error starting backend server: {str(e)}")
         raise
 
+def start_frontend():
+    """Start the frontend development server."""
+    try:
+        # Change to the frontend directory
+        frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
+        os.chdir(frontend_dir)
+        
+        # Start the frontend server with output streaming
+        process = subprocess.Popen(
+            ["ng", "serve"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1
+        )
+        
+        # Create threads to stream output
+        def stream_output(stream, prefix):
+            for line in stream:
+                logger.info(f"{prefix}: {line.strip()}")
+                
+        import threading
+        threading.Thread(target=stream_output, args=(process.stdout, "FRONTEND OUT"), daemon=True).start()
+        threading.Thread(target=stream_output, args=(process.stderr, "FRONTEND ERR"), daemon=True).start()
+        
+        # Wait for server to start
+        if not wait_for_port_available(4200, timeout=5):
+            time.sleep(2)  # Give the server a bit more time to start
+            if process.poll() is None:
+                logger.info("Frontend server started successfully")
+                return process
+            else:
+                logger.error("Failed to start frontend server")
+                raise RuntimeError("Frontend server failed to start")
+                
+        return process
+    except Exception as e:
+        logger.error(f"Error starting frontend server: {str(e)}")
+        raise
+
 if __name__ == "__main__":
     try:
-        logger.info("Starting backend server...")
+        logger.info("Starting servers...")
         
-        # Kill any existing process on port 8000
+        # Kill any existing processes on ports 8000 and 4200
         if is_port_in_use(8000):
             logger.info("Port 8000 is in use, killing existing process...")
             kill_process_on_port(8000)
+            
+        if is_port_in_use(4200):
+            logger.info("Port 4200 is in use, killing existing process...")
+            kill_process_on_port(4200)
         
-        # Start the backend server
+        # Start both servers
         backend_process = start_backend()
+        frontend_process = start_frontend()
         
         try:
-            # Keep the script running and the backend server alive
-            backend_process.wait()
+            # Keep the script running and both servers alive
+            while True:
+                if backend_process.poll() is not None:
+                    logger.error("Backend server died unexpectedly")
+                    break
+                if frontend_process.poll() is not None:
+                    logger.error("Frontend server died unexpectedly")
+                    break
+                time.sleep(1)
         except KeyboardInterrupt:
-            logger.info("\nShutting down backend server...")
+            logger.info("\nShutting down servers...")
             backend_process.terminate()
+            frontend_process.terminate()
             backend_process.wait(timeout=5)
+            frontend_process.wait(timeout=5)
             sys.exit(0)
             
     except Exception as e:

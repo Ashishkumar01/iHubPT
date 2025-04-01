@@ -1,5 +1,5 @@
 .sidenav-container {
-  height: 100vh;
+  height: 100%;
 }
 
 .sidenav {
@@ -7,13 +7,36 @@
 }
 
 .content {
-  padding: 20px;
+  padding: 24px;
 }
 
 mat-toolbar {
   position: sticky;
   top: 0;
   z-index: 1;
+
+  .brand {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: white;
+    height: 100%;
+
+    .logo-img {
+      height: 40px;
+      width: 40px;
+      margin-right: 16px;
+      display: inline-flex;
+      object-fit: contain;
+    }
+
+    span {
+      font-size: 1.2rem;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+  }
 }
 
 .active {

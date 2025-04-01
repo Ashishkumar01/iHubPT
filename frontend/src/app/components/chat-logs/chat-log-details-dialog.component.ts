@@ -78,9 +78,21 @@ export class ChatLogDetailsDialog {
     private datePipe: DatePipe
   ) {}
 
-  formatDuration(ms: number): string {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+  formatDuration(ms: number | string | null | undefined): string {
+    if (ms === null || ms === undefined) {
+      return '0ms';
+    }
+    
+    const numericMs = typeof ms === 'string' ? parseFloat(ms) : ms;
+    
+    if (isNaN(numericMs as number)) {
+      return '0ms';
+    }
+    
+    if ((numericMs as number) < 1000) {
+      return `${Math.round(numericMs as number)}ms`;
+    }
+    return `${((numericMs as number) / 1000).toFixed(2)}s`;
   }
 
   formatTimestamp(timestamp: string): string {
@@ -91,7 +103,17 @@ export class ChatLogDetailsDialog {
     return JSON.stringify(metadata, null, 2);
   }
 
-  formatCost(cost: number): string {
-    return `$${cost.toFixed(4)}`;
+  formatCost(cost: number | string | null | undefined): string {
+    if (cost === null || cost === undefined) {
+      return '$0.0000';
+    }
+    
+    const numericCost = typeof cost === 'string' ? parseFloat(cost) : cost;
+    
+    if (isNaN(numericCost as number)) {
+      return '$0.0000';
+    }
+    
+    return `$${(numericCost as number).toFixed(4)}`;
   }
 } 
