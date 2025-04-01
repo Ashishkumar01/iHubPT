@@ -37,6 +37,9 @@ ENV/
 *.sqlite3
 backend/app/chroma_db/
 data/chroma/
+**/chroma_db/
+**/chroma.sqlite3
+**/length.bin
 
 # Node
 node_modules/
