@@ -66,10 +66,18 @@
     <div class="chat-header">
       <h2>Chat with Agent</h2>
       <div class="status-indicator" *ngIf="selectedAgent">
-        <mat-icon [class]="selectedAgent.status.toLowerCase()">
-          {{ selectedAgent.status === AgentStatus.RUNNING ? 'check_circle' : 'error' }}
+        <mat-icon [class]="selectedAgent.status">
+          {{ selectedAgent.status === AgentStatus.RUNNING ? 'check_circle' : 
+             selectedAgent.status === AgentStatus.PAUSED ? 'pause_circle' :
+             selectedAgent.status === AgentStatus.ERROR ? 'error' :
+             selectedAgent.status === AgentStatus.FAILED ? 'cancel' :
+             selectedAgent.status === AgentStatus.COMPLETED ? 'task_alt' : 'radio_button_unchecked' }}
         </mat-icon>
-        <span>{{ selectedAgent.status === AgentStatus.RUNNING ? 'Agent is running' : 'Agent is not running' }}</span>
+        <span>{{ selectedAgent.status === AgentStatus.RUNNING ? 'Agent is running' :
+                 selectedAgent.status === AgentStatus.PAUSED ? 'Agent is paused' :
+                 selectedAgent.status === AgentStatus.ERROR ? 'Agent encountered an error' :
+                 selectedAgent.status === AgentStatus.FAILED ? 'Agent failed' :
+                 selectedAgent.status === AgentStatus.COMPLETED ? 'Agent completed' : 'Agent is idle' }}</span>
       </div>
     </div>
 

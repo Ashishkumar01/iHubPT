@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { Agent, AgentCreate, AgentUpdate, AgentStatus } from '../models/agent';
 import { environment } from '../../environments/environment';
 import { tap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
+import { switchMap } from 'rxjs/operators';
 
 interface ChatResponse {
   content: string;
@@ -77,8 +79,10 @@ export class AgentService {
     return this.http.post<Agent>(`${this.apiUrl}/${id}/stop`, {});
   }
 
-  sendMessage(id: string, message: string): Observable<ChatResponse> {
-    return this.http.post<ChatResponse>(`${this.apiUrl}/${id}/chat`, { content: message });
+  sendMessage(agentId: string, message: string): Observable<ChatResponse> {
+    return this.http.post<ChatResponse>(`${this.apiUrl}/${agentId}/chat`, {
+      content: message
+    });
   }
 
   getAvailableTools(): Observable<Tool[]> {

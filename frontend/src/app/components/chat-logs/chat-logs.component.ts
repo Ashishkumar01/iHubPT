@@ -122,16 +122,33 @@ export class ChatLogsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (logs) => {
           console.log('Received chat logs:', logs);
-          this.dataSource.data = logs.map(log => ({
-            ...log,
-            input_tokens: log.input_tokens || 0,
-            output_tokens: log.output_tokens || 0,
-            total_tokens: log.total_tokens || 0,
-            cost: log.cost || 0,
-            duration_ms: log.duration_ms || 0,
-            user: log.user || 'Administrator',
-            department: log.department || 'Post Trade'
-          }));
+          this.dataSource.data = logs.map(log => {
+            // Properly parse numeric values to ensure they are numbers
+            const parseNumeric = (value: any, defaultValue: number = 0): number => {
+              if (value === undefined || value === null) return defaultValue;
+              if (typeof value === 'number') return value;
+              if (typeof value === 'string') {
+                try {
+                  const parsed = parseFloat(value);
+                  return isNaN(parsed) ? defaultValue : parsed;
+                } catch (e) {
+                  return defaultValue;
+                }
+              }
+              return defaultValue;
+            };
+            
+            return {
+              ...log,
+              input_tokens: parseNumeric(log.input_tokens),
+              output_tokens: parseNumeric(log.output_tokens),
+              total_tokens: parseNumeric(log.total_tokens),
+              cost: parseNumeric(log.cost),
+              duration_ms: parseNumeric(log.duration_ms),
+              user: log.user || 'Administrator',
+              department: log.department || 'Post Trade'
+            };
+          });
           this.loading = false;
         },
         error: (error) => {
@@ -180,17 +197,39 @@ export class ChatLogsComponent implements OnInit, OnDestroy {
     this.dataSource.filter = JSON.stringify(filterValue);
   }
 
-  formatDuration(ms: number): string {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+  formatDuration(ms: number | string | null | undefined): string {
+    if (ms === null || ms === undefined) {
+      return '0ms';
+    }
+    
+    const numericMs = typeof ms === 'string' ? parseFloat(ms) : ms;
+    
+    if (isNaN(numericMs as number)) {
+      return '0ms';
+    }
+    
+    if ((numericMs as number) < 1000) {
+      return `${Math.round(numericMs as number)}ms`;
+    }
+    return `${((numericMs as number) / 1000).toFixed(2)}s`;
   }
 
   formatTimestamp(timestamp: string): string {
     return this.datePipe.transform(timestamp, 'MMM d, y HH:mm:ss') || timestamp;
   }
 
-  formatCost(cost: number): string {
-    return `$${cost.toFixed(4)}`;
+  formatCost(cost: number | string | null | undefined): string {
+    if (cost === null || cost === undefined) {
+      return '$0.0000';
+    }
+    
+    const numericCost = typeof cost === 'string' ? parseFloat(cost) : cost;
+    
+    if (isNaN(numericCost as number)) {
+      return '$0.0000';
+    }
+    
+    return `$${(numericCost as number).toFixed(4)}`;
   }
 
   viewDetails(log: ChatLog) {
